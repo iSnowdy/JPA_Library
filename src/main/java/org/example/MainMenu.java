@@ -20,7 +20,7 @@ public class MainMenu {
                 userChoice = ScannerCreator.nextInt();
 
                 if (!validateMenuOption(userChoice)) {
-                    System.out.println("Invalid option! Please select a valid option (1 - 6).\n");
+                    System.out.println("Invalid option! Please select a valid option (1 - 7).\n");
                     continue;
                 }
                 executeMenuChoice(userChoice);
@@ -37,14 +37,15 @@ public class MainMenu {
         System.out.println("|              1. Add New User                    |");
         System.out.println("|              2. Add New Book                    |");
         System.out.println("|              3. Add New Lend                    |");
-        System.out.println("|              4. Show Lends by Year              |");
-        System.out.println("|              5. List All Books in Lend by User  |");
-        System.out.println("|              6. Exit                            |");
+        System.out.println("|              4. Return Book                     |");
+        System.out.println("|              5. Show Lends by Year              |");
+        System.out.println("|              6. List All Books in Lend by User  |");
+        System.out.println("|              7. Exit                            |");
         System.out.println("===================================================");
     }
 
     private boolean validateMenuOption(int option) {
-        return option >= 1 && option <= 6;
+        return option >= 1 && option <= 7;
     }
 
     private void executeMenuChoice(int choice) throws ExitException {
@@ -52,9 +53,10 @@ public class MainMenu {
             case 1 -> hibernateOperations.addNewUser();
             case 2 -> hibernateOperations.addNewBook();
             case 3 -> hibernateOperations.addNewLend();
-            case 4 -> hibernateOperations.printLendByYear();
-            case 5 -> hibernateOperations.printBookByUserLend();
-            case 6 -> exitApplication();
+            case 4 -> hibernateOperations.returnBook();
+            case 5 -> hibernateOperations.printLendByYear();
+            case 6 -> hibernateOperations.printBookByUserLend();
+            case 7 -> exitApplication();
             default -> throw new IllegalStateException("Unexpected value: " + choice);
         }
     }

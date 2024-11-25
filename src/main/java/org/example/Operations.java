@@ -6,6 +6,7 @@ public interface Operations {
     void addNewUser() throws ExitException;
     void addNewBook() throws ExitException;
     void addNewLend() throws ExitException;
+    void returnBook() throws ExitException;
 
     void printLendByYear() throws ExitException;
 

@@ -5,6 +5,8 @@ import org.hibernate.*;
 import org.hibernate.exception.ConstraintViolationException;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Calendar;
 import java.util.List;
 
 public class HibernateOperations implements Operations {
@@ -21,9 +23,17 @@ public class HibernateOperations implements Operations {
 
     private final ValidationUtil validationUtil;
 
+    private final int UPDATE_ALL_BOOKS_HOUR = 8;
+    private final int UPDATE_ALL_BOOKS_MINUTE = 0;
+    private String UPDATE_TIMER;
+
     // TODO: ExitException inside catch? Session Factory static from HibernateUtil?
     public HibernateOperations() {
         this.validationUtil = new ValidationUtil();
+        // When the program is started each day, launch the update for
+        // stock always at the same time
+        setUpdateTimer(UPDATE_ALL_BOOKS_HOUR, UPDATE_ALL_BOOKS_MINUTE);
+        prepareToUpdateAllBooksStock();
     }
 
     // This method will ask the user if they want to continue giving inputs. If not,
@@ -39,6 +49,7 @@ public class HibernateOperations implements Operations {
                     case "user" -> askForUserData();
                     case "book" -> askForBookData();
                     case "lend" -> askForLendData();
+                    case "return" -> askForReturnBookData();
                     default -> System.out.println("Unknown origin: " + origin);
                 }
                 break;
@@ -58,8 +69,7 @@ public class HibernateOperations implements Operations {
         System.err.println("Error during the transaction. Rolling back...");
         e.printStackTrace();
         transaction.rollback();
-        System.out.println("Returning to the main menu...");
-        throw new ExitException("Error during the transaction for " + origin + " data");
+        throw new ExitException("Error during the transaction for " + origin + " operation");
     }
 
     // Abstracted method to ask for user input. WIth the 'EXIT' keyword to redirect to main menu
@@ -120,7 +130,7 @@ public class HibernateOperations implements Operations {
     }
 
     private void isUserInTheSystem() throws ExitException {
-        User user = selectUser(true);
+        User user = selectUser();
         if (user != null) {
             System.out.println("User already exists");
             continuePromptingData("user");
@@ -182,7 +192,7 @@ public class HibernateOperations implements Operations {
     }
 
     private void isBookInTheSystem() throws ExitException {
-        Book book = selectBook(true);
+        Book book = selectBook();
         if (book != null) {
             System.out.println("Book already exists");
             continuePromptingData("book");
@@ -206,14 +216,6 @@ public class HibernateOperations implements Operations {
         return book;
     }
 
-    /*
-    1. Ask if the lending date is today or not
-    2. Ask if there's a returning date
-    3. Validate the dates
-    4. Check if the desired book exists and/or is available to be lent
-    5. Check if the user exists
-     */
-
     @Override
     public void addNewLend() throws ExitException {
         ScannerCreator.nextLine();
@@ -226,6 +228,7 @@ public class HibernateOperations implements Operations {
                 Lend lendInformation = createLend();
                 lendSession.flush();
                 lendSession.persist(lendInformation);
+                updateBookStock(this.book.getIsbn(),-1);
                 transaction.commit();
 
                 System.out.println("Lend with the following information has been successfully added");
@@ -240,16 +243,17 @@ public class HibernateOperations implements Operations {
         System.out.println("If you would like to exit at any point, please type 'EXIT'");
         System.out.println("Please provide the following information regarding the book to be lent:");
 
-        this.lendStartDate = getLendingStartDate();
-        this.lendEndDate = getLendingEndDate();
-
-        validateLendDates();
-
+        this.userCode = askForInput("User Code");
         if (!isValidUser()) {
             System.out.println("The user does not exist");
             continuePromptingData("lend");
         }
 
+        this.lendStartDate = getLendingStartDate();
+        this.lendEndDate = getLendingEndDate();
+        validateLendDates();
+
+        this.bookISBN = askForInput("ISBN");
         if (!isValidBookToLend()) {
             System.out.println("The chosen book is not available");
             continuePromptingData("lend");
@@ -283,20 +287,15 @@ public class HibernateOperations implements Operations {
     }
 
     private boolean isValidUser() {
-        return selectUser(false) != null;
+        return selectUser() != null;
     }
 
     private boolean isValidBookToLend() {
-        Book book = selectBook(false);
-        return book != null && !isBookAlreadyLent(book);
+        this.book = selectBook();
+        return this.book != null && !isBookAlreadyLent(this.book);
     }
     // singleResult, singleResultOrNull, MaxResults + uniqueResults?
-    private User selectUser(boolean hasUserInput) {
-        if (!hasUserInput) {
-            System.out.println("User code: ");
-            String userCode = ScannerCreator.nextLine();
-        }
-
+    private User selectUser() {
         String query =
                 "FROM User u " +
                 "WHERE u.codigo = :userCode";
@@ -311,30 +310,8 @@ public class HibernateOperations implements Operations {
             return this.user;
         }
     }
-    // Checks if a book has been lent
-    private boolean isBookAlreadyLent(Book book) {
-        String query =
-                "FROM Lend l " +
-                "WHERE l.libro = :chosenBook AND l.fechadevolucion < :currentDate";
 
-        try (Session session = HibernateUtil.openSession()) {
-            this.lend =
-                     session.createQuery(query, Lend.class)
-                     .setParameter("chosenBook", book.getIsbn())
-                     .setParameter("currentDate", LocalDate.now())
-                     .setReadOnly(true)
-                     .setMaxResults(1)
-                     .uniqueResult();
-            return this.lend != null;
-        }
-    }
-
-    private Book selectBook(boolean hasUserInput) {
-        if (!hasUserInput) {
-            System.out.println("Book ISBN to lend: ");
-            String bookISBN = ScannerCreator.nextLine();
-        }
-
+    private Book selectBook() {
         String query =
                 "FROM Book b " +
                 "WHERE b.isbn = :bookISBN";
@@ -342,11 +319,33 @@ public class HibernateOperations implements Operations {
         try (Session session = HibernateUtil.openSession()) {
             this.book =
                     session.createQuery(query, Book.class)
-                    .setParameter("bookISBN", bookISBN)
-                    .setReadOnly(true)
-                    .setMaxResults(1)
-                    .uniqueResult();
+                            .setParameter("bookISBN", bookISBN)
+                            .setReadOnly(true)
+                            .setMaxResults(1)
+                            .uniqueResult();
+            System.out.println(book);
             return this.book;
+        }
+    }
+
+    // Checks if a book has been lent
+    // Returns true if lend is not null; meaning someone has the book
+    // TODO: Stock management
+    private boolean isBookAlreadyLent(Book givenBook) {
+        String query =
+                "FROM Lend l " +
+                "WHERE l.libro = :chosenBook AND l.fechadevolucion > :currentDate";
+
+        try (Session session = HibernateUtil.openSession()) {
+            this.lend =
+                     session.createQuery(query, Lend.class)
+                     .setParameter("chosenBook", givenBook)
+                     .setParameter("currentDate", LocalDate.now())
+                     .setReadOnly(true)
+                     .setMaxResults(1)
+                     .uniqueResult();
+            System.out.println(lend);
+            return this.lend != null;
         }
     }
 
@@ -357,6 +356,90 @@ public class HibernateOperations implements Operations {
         lend.setFechaprestamo(LocalDate.parse(this.lendStartDate));
         lend.setFechadevolucion(this.lendEndDate != null ? LocalDate.parse(this.lendEndDate) : null);
         return lend;
+    }
+
+    private boolean updateBookStock(String givenISBN, int bookCopies) {
+        System.out.println("Updating book stock... Amount changed: " + bookCopies);
+        String query =
+                "UPDATE Book b " +
+                "SET b.copias = b.copias + :bookCopies " +
+                "WHERE b.isbn = :givenISBN ";
+
+        try (Session session = HibernateUtil.openSession()) {
+            return session.createMutationQuery(query)
+                    .setParameter("bookCopies", bookCopies)
+                    .setParameter("isbn", givenISBN)
+                    .executeUpdate() > 1;
+            // Hibernate already makes changes to the DB when
+            // executeUpdate() is called. persist() would be needed
+            // for new entities added
+        }
+    }
+    // TODO: Test this and update all books
+    @Override
+    public void returnBook() throws ExitException {
+        ScannerCreator.nextLine();
+        System.out.println("Initializing return book operation...");
+
+        try (Session returnBookSession = HibernateUtil.openSession()) {
+            Transaction transaction = returnBookSession.beginTransaction();
+            try {
+                askForReturnBookData();
+                updateBookStock(this.book.getIsbn(), 1);
+                transaction.commit();
+
+                System.out.println("The book has been successfully returned");
+            } catch (IllegalStateException | PersistenceException e) {
+                handleTransactionError(transaction, e, "return book");
+            }
+        }
+    }
+
+    private void askForReturnBookData() throws ExitException {
+        System.out.println("If you would like to exit at any point, please type 'EXIT'");
+        System.out.println("Please provide the following information regarding the book to be returned:");
+
+        this.userCode = askForInput("User Code");
+        if (!isValidUser()) {
+            System.out.println("The user does not exist");
+            continuePromptingData("lend");
+        }
+
+        this.lendEndDate = getLendingEndDate();
+        validateReturnDate();
+
+        this.bookISBN = askForInput("ISBN");
+        if (!isBookValidToReturn()) {
+            System.out.println("The given user does not have any book lends to its name");
+            continuePromptingData("return");
+        }
+    }
+
+    private void validateReturnDate() throws ExitException {
+        if (!validationUtil.isValidDate(this.lendEndDate)) {
+            continuePromptingData("return");
+        }
+    }
+    // If book exists (true) and someone has it (true)
+    private boolean isBookValidToReturn() {
+        this.book = selectBook();
+        return this.book != null && isBookLentByUser(this.book, this.user);
+    }
+    // Returns a lend result if the given user has that book
+    private boolean isBookLentByUser(Book givenBook, User givenUser) {
+        String query =
+                "FROM Lend l " +
+                "WHERE l.libro = :givenBook AND l.usuario = :givenUser";
+
+        try (Session session = HibernateUtil.openSession()) {
+            Lend tempLend = session.createQuery(query, Lend.class)
+                    .setParameter("chosenBook", givenBook)
+                    .setParameter("givenUser", givenUser)
+                    .setReadOnly(true)
+                    .setMaxResults(1)
+                    .uniqueResult();
+            return tempLend != null;
+        }
     }
 
     // Given a date by the user, print the list
@@ -412,7 +495,8 @@ public class HibernateOperations implements Operations {
     public void changeUserByLend(List<Lend> lendList) throws ExitException {
         boolean changeUser = askUserIfChangeUser();
         if (changeUser) {
-            User newUser = selectUser(false);
+            this.userCode = askForInput("User Code");
+            User newUser = selectUser();
             if (newUser == null) {
                 System.out.println("The user does not exist. Operation canceled");
                 System.out.println("Returning to the main menu...");
@@ -481,6 +565,80 @@ public class HibernateOperations implements Operations {
                     .getResultList();
         }
     }
+    // Methods to check if an update for all books must be done
+    private void setUpdateTimer(int hour, int minute) {
+        this.UPDATE_TIMER = LocalTime.of(hour, minute).toString();
+    }
+
+    private void prepareToUpdateAllBooksStock() {
+        if (!isUpdateTime()) {
+            return;
+        }
+        String currentDate = LocalDate.now().toString();
+        List<Book> booksByTodaysLendDate = getBooksByTodaysLendDate(currentDate);
+
+        if (booksByTodaysLendDate.isEmpty()) System.out.println("There are no books to update");
+        else {
+            try {
+                updateAllBooksStock(booksByTodaysLendDate);
+            } catch (ExitException _) {
+                System.err.println("Unexpected error while updating all books stock");
+            }
+        }
+    }
+
+    private boolean isUpdateTime() {
+        Calendar calendar = Calendar.getInstance();
+        String calendarTime = calendar.get(Calendar.HOUR_OF_DAY) + ":0" + calendar.get(Calendar.MINUTE);
+
+        if (calendarTime.equals(UPDATE_TIMER)) {
+            System.out.println("Time to update the book stock...");
+            return true;
+        }
+        return false;
+    }
+
+    private List<Book> getBooksByTodaysLendDate(String currentDate) {
+        String query =
+                "SELECT b " +
+                        "FROM Book b " +
+                        "WHERE b.isbn IN " +
+                        "(" +
+                        "SELECT l.libro " +
+                        "FROM Lend l " +
+                        "WHERE l.fechadevolucion >= :currentDate" +
+                        ")";
+
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            return session.createQuery(query, Book.class)
+                    .setParameter("currentDate", currentDate)
+                    .setReadOnly(false)
+                    .getResultList();
+        }
+    }
+
+    private void updateAllBooksStock(List<Book> booksToUpdate) throws ExitException {
+        try (Session updateAllBooksStockSession = HibernateUtil.getSessionFactory().openSession()) {
+            Transaction transaction = updateAllBooksStockSession.beginTransaction();
+            try {
+                for (Book book : booksToUpdate) {
+                    increaseBookCopiesInStock(book);
+                    updateAllBooksStockSession.persist(book);
+                }
+                transaction.commit();
+                System.out.println("All books stock have been successfully updated");
+            } catch (IllegalStateException | PersistenceException e) {
+                handleTransactionError(transaction, e, "updating all books stock");
+            }
+        }
+    }
+
+    private void increaseBookCopiesInStock(Book book) {
+        int currentCopies = book.getCopias();
+        int newAmountOfCopies = currentCopies++;
+        book.setCopias(newAmountOfCopies);
+    }
+
     // Close the Session Factory. Sessions are closed inside each method
     // they are called
     public void closeHibernate() {

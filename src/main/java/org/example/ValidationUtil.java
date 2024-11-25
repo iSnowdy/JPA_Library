@@ -40,7 +40,7 @@ public class ValidationUtil {
     }
 
     // Validate date format (YYYY-MM-DD)
-    private boolean isValidDate(String date) {
+    public boolean isValidDate(String date) {
         return Date.validateStaticDate(date);
     }
 }
