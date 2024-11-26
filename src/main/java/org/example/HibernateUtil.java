@@ -13,7 +13,7 @@ public class HibernateUtil {
         try {
             // Predetermined configuration for SessionFactory
             tempSessionFactory = new Configuration().configure("hibernate.cfg.xml").buildSessionFactory();
-            System.out.println("SessionFactory initialized successfully.");
+            System.out.println("SessionFactory initialized successfully");
         } catch (Throwable ex) {
             System.err.println("Failed to initialize SessionFactory: " + ex.getMessage());
             ex.printStackTrace();
@@ -24,16 +24,16 @@ public class HibernateUtil {
     // Consider removing it. Object is now static
     public static SessionFactory getSessionFactory() {
         if (SESSION_FACTORY == null) {
-            throw new IllegalStateException("SessionFactory was not initialized successfully.");
+            throw new IllegalStateException("SessionFactory was not initialized successfully");
         }
         return SESSION_FACTORY;
     }
 
     public static Session openSession() {
         if (SESSION_FACTORY == null) {
-            throw new IllegalStateException("SessionFactory is not initialized.");
+            throw new IllegalStateException("SessionFactory is not initialized");
         }
-        System.out.println("Opening a new Hibernate session.");
+        System.out.println("Opening a new Hibernate session");
         return SESSION_FACTORY.openSession();
     }
     // Probably don't need it due to try-with-resources usage
@@ -41,7 +41,7 @@ public class HibernateUtil {
         if (session != null) {
             try {
                 session.close();
-                System.out.println("Session closed successfully.");
+                System.out.println("Session closed successfully");
             } catch (Exception ex) {
                 System.err.println("Failed to close session: " + ex.getMessage());
                 ex.printStackTrace();
@@ -53,7 +53,7 @@ public class HibernateUtil {
         if (SESSION_FACTORY != null) {
             try {
                 SESSION_FACTORY.close();
-                System.out.println("SessionFactory closed successfully.");
+                System.out.println("SessionFactory closed successfully");
             } catch (Exception ex) {
                 System.err.println("Failed to close SessionFactory: " + ex.getMessage());
                 ex.printStackTrace();

@@ -1,6 +1,7 @@
 package org.example;
 
 import java.util.Scanner;
+import java.util.logging.Logger;
 
 // Utility class to create and use Scanners
 public class ScannerCreator {

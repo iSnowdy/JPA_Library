@@ -20,7 +20,7 @@ public class MainMenu {
                 userChoice = ScannerCreator.nextInt();
 
                 if (!validateMenuOption(userChoice)) {
-                    System.out.println("Invalid option! Please select a valid option (1 - 7).\n");
+                    System.out.println("Invalid option! Please select a valid option (1 - 7)\n");
                     continue;
                 }
                 executeMenuChoice(userChoice);

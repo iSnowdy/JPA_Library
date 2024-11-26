@@ -21,12 +21,12 @@ public class Lend {
     @Column(name = "fechadevolucion")
     private LocalDate fechadevolucion;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "libro", nullable = false)
     private Book libro;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "usuario", nullable = false)
     private org.example.User usuario;
